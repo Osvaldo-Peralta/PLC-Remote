@@ -1,4 +1,4 @@
-// Button.tsx
+//src/components/common/Button.tsx
 interface ButtonProps {
     name: string;
     variant?: 'primary' | 'secondary' | 'success' | 'danger';
