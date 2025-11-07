@@ -1,4 +1,4 @@
-// src/components/ControlPanel.tsx
+//src/components/ControlPanel.tsx
 import { useState, useEffect } from "react";
 
 const PLC_API_BASE = 'http://localhost:8000';
@@ -78,7 +78,7 @@ export default function ControlPanel() {
                     <div className="flex items-center">
                         <div
                             className={`w-6 h-6 rounded-full mr-2 ${
-                                isRunning === null ? 'bg-gray-400' : isRunning ? 'bg-green-500' : 'bg-gray-300'
+                                isRunning === null ? 'bg-gray-400' : isRunning ? 'bg-red-500' : 'bg-gray-300'
                             }`}
                             title={isRunning === null ? 'Desconocido' : isRunning ? 'ON' : 'OFF'}
                         ></div>
