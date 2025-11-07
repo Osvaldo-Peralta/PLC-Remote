@@ -1,4 +1,4 @@
-//src/components/common/Light.tsx
+// Light.tsx
 interface LightProps {
     name: string;
     value?: boolean;
