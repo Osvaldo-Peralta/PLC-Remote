@@ -48,7 +48,8 @@ async def safe_read(name: str):
         print(f"❌ Error al leer '{name}': {e}")
         return {"status": "error", "message": f"No se pudo leer de {name}"}
 
-# Endpoints actuales
+# --- Endpoints actuales --- #
+# Botón de inicio
 @app.post("/start")
 async def start():
     # Escribir True en 'start', False en 'stop'
@@ -58,6 +59,7 @@ async def start():
         return {"status": "error", "message": "No se pudo escribir en el PLC"}
     return {"status": "ok", "action": "start", "value": True}
 
+# Botón de paro
 @app.post("/stop")
 async def stop():
     # Escribir False en 'start', True en 'stop'
@@ -67,6 +69,24 @@ async def stop():
         return {"status": "error", "message": "No se pudo escribir en el PLC"}
     return {"status": "ok", "action": "stop", "value": False}
 
+# Led de prueba
 @app.get("/status")
 async def status():
     return await safe_read("f_prueba")
+
+# --- Aquí puedes añadir mas elementos --- #
+@app.get("/foco_rojo")
+async def foco_rojo():
+    return await safe_read("f_rojo")
+
+@app.get("/foco_amarillo")
+async def foco_amarillo():
+    return await safe_read("f_amarillo")
+
+@app.get("/foco_verde")
+async def foco_verde():
+    return await safe_read("f_verde")
+
+@app.get("/current_time")
+async def get_current_time():
+    return await safe_read("current_time")
