@@ -1,28 +1,45 @@
-# plc_client.py
-
 from asyncua import Client, ua
 from typing import Dict, Optional, Any
 import asyncio
+import time
+
 
 class PLCManager:
-    def __init__(self, endpoint: str):
+    def __init__(self, endpoint: str, reconnect_delay: float = 3.0):
         self.endpoint = endpoint
+        self.reconnect_delay = reconnect_delay
         self.client: Optional[Client] = None
         self.nodes: Dict[str, Any] = {}
+        self.node_definitions: Dict[str, str] = {}
+        self.latest_values: Dict[str, Any] = {}
+        self.connected = False
+        self._monitor_task: Optional[asyncio.Task] = None
 
     async def connect(self):
-        self.client = Client(url=self.endpoint)
-        try:
-            await self.client.connect()
-            print("✅ Conectado al PLC")
-        except Exception as e:
-            print(f"❌ Error al conectar: {e}")
-            raise
+        """
+        Conecta al PLC. A diferencia de la versión anterior, no lanza
+        excepción: reintenta indefinidamente hasta lograr conexión.
+        """
+        while True:
+            try:
+                self.client = Client(url=self.endpoint)
+                await self.client.connect()
+                self.connected = True
+                print(f"✅ Conectado al PLC ({self.endpoint})")
+                return
+            except Exception as e:
+                self.connected = False
+                print(f"❌ Error al conectar: {e}. Reintentando en {self.reconnect_delay}s...")
+                await asyncio.sleep(self.reconnect_delay)
 
     async def disconnect(self):
         if self.client:
-            await self.client.disconnect()
-            print("🔌 Desconectado del PLC")
+            try:
+                await self.client.disconnect()
+                print("🔌 Desconectado del PLC")
+            except Exception:
+                pass
+        self.connected = False
 
     async def add_node(self, name: str, node_id: str):
         if not self.client:
@@ -31,27 +48,78 @@ class PLCManager:
         self.nodes[name] = node
         print(f"✅ Nodo '{name}' encontrado: {node}")
 
+    async def initialize_nodes(self, node_definitions: Dict[str, str]):
+        self.node_definitions = node_definitions
+        for name, node_id in node_definitions.items():
+            try:
+                await self.add_node(name, node_id)
+            except Exception as e:
+                print(f"⚠️ No se pudo inicializar el nodo '{name}' ({node_id}): {e}")
+
     async def read_value(self, name: str) -> Any:
         node = self.nodes.get(name)
         if not node:
             raise KeyError(f"Nodo '{name}' no encontrado")
-        try:
-            return await node.read_value()
-        except Exception as e:
-            print(f"❌ Error al leer nodo '{name}': {e}")
-            raise
+        return await node.read_value()
 
     async def write_value(self, name: str, value: Any, variant_type: ua.VariantType = ua.VariantType.Boolean):
         node = self.nodes.get(name)
         if not node:
             raise KeyError(f"Nodo '{name}' no encontrado")
-        try:
-            await node.write_value(ua.DataValue(ua.Variant(value, variant_type)))
-        except Exception as e:
-            print(f"❌ Error al escribir en nodo '{name}': {e}")
-            raise
+        await node.write_value(ua.DataValue(ua.Variant(value, variant_type)))
 
-    # Método para inicializar múltiples nodos de una lista
-    async def initialize_nodes(self, node_definitions: Dict[str, str]):
-        for name, node_id in node_definitions.items():
-            await self.add_node(name, node_id)
+    async def read_all(self) -> Dict[str, Any]:
+        """Lee todos los nodos registrados en una sola pasada."""
+        values = {}
+        for name in self.nodes:
+            try:
+                values[name] = await self.read_value(name)
+            except Exception as e:
+                values[name] = None
+                print(f"❌ Error al leer '{name}': {e}")
+        return values
+
+    def _print_status(self, values: Dict[str, Any]):
+        line = " | ".join(f"{k}={round(v, 2)}" for k, v in values.items())
+        print(f"[{time.strftime('%H:%M:%S')}] {line}")
+
+    async def monitor_loop(self, ts: float = 1.0):
+        """
+        Loop de fondo:
+        - lee todos los nodos cada `ts` segundos
+        - actualiza self.latest_values (lo que consumen los endpoints)
+        - imprime el snapshot en terminal
+        - si se pierde la conexión, reconecta y re-registra los nodos solo
+        """
+        while True:
+            start = time.time()
+
+            if not self.connected:
+                await self.connect()
+                await self.initialize_nodes(self.node_definitions)
+
+            try:
+                self.latest_values = await self.read_all()
+                self._print_status(self.latest_values)
+            except Exception as e:
+                print(f"❌ Error en el loop de monitoreo: {e}")
+                self.connected = False
+
+            elapsed = time.time() - start
+            sleep_for = ts - elapsed
+            if sleep_for > 0:
+                await asyncio.sleep(sleep_for)
+            else:
+                print(f"⚠️ El ciclo tardó {elapsed:.3f}s > TS={ts}s")
+
+    def start_monitoring(self, node_definitions: Dict[str, str], ts: float = 1.0):
+        self.node_definitions = node_definitions
+        self._monitor_task = asyncio.create_task(self.monitor_loop(ts))
+
+    async def stop_monitoring(self):
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
