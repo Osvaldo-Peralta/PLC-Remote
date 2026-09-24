@@ -1,4 +1,4 @@
-// frontend/src/components/invernadero/InvernaderoDashboard.tsx
+// frontend/src/components/monitor_invernadero/InvernaderoDashboard.tsx
 import { sensors, actuators, modoAutomatico } from './InvernaderoElements';
 import { useInvernaderoStatus } from './UseInvernaderoStatus';
 import SensorCard from './SensorCard';

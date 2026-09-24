@@ -1,4 +1,4 @@
-//rc/config/PLCElements.ts
+// src/config/PLCElements.ts
 /* Aqui se definiran todos los elementos que pueden existir en el PLC */
 export interface PLCElementConfig {
     id: string;

@@ -1,4 +1,4 @@
-// frontend/src/components/invernadero/SensorCard.tsx
+// frontend/src/components/monitor_invernadero/SensorCard.tsx
 interface SensorCardProps {
   label: string;
   value?: number;

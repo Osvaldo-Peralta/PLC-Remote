@@ -1,4 +1,4 @@
-// frontend/src/components/invernadero/ActuatorSwitch.tsx
+// frontend/src/components/monitor_invernadero/ActuatorSwitch.tsx
 interface ActuatorSwitchProps {
   label: string;
   value?: boolean;
@@ -31,7 +31,7 @@ export default function ActuatorSwitch({ label, value, pending, onToggle }: Actu
       >
         <span
           className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-            isOn ? 'translate-x-5' : 'translate-x-0.5'
+            isOn ? 'translate-x-5' : 'translate-x-0.2'
           }`}
         />
       </button>

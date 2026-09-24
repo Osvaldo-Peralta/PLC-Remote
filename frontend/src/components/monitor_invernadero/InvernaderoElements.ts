@@ -1,4 +1,4 @@
-// frontend/src/config/invernaderoElements.ts
+// frontend/src/components/monitor_invernadero/InvernaderoElements.ts
 /* Elementos del proyecto de invernadero (nodos definidos en config.py del backend). */
 
 export interface SensorConfig {

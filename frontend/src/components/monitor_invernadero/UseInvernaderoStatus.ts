@@ -1,4 +1,4 @@
-// frontend/src/hooks/useInvernaderoStatus.ts
+// frontend/src/components/monitor_invernadero/UseInvernaderoStatus.ts
 import { useState, useEffect, useCallback } from 'react';
 
 const PLC_API_BASE = 'http://localhost:8000';
