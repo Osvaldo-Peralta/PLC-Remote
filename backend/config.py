@@ -6,9 +6,15 @@ NODE_DEFINITIONS = {
     "humedadSHT41": "ns=4;i=46",
     "temperaturaExt": "ns=4;i=49",
     "temperaturaSHT41": "ns=4;i=47",
-    "extractor": "ns=4;i=29",
-    "humificador": "ns=4;i=30",
-    "mister": "ns=4;i=31",
+
+    "extractor": "ns=4;i=29",       # Read only
+    "humificador": "ns=4;i=30",     # Read only
+    "mister": "ns=4;i=31",          # Read only
+
+    # --- Estas son las variables sobre las que escribire, para activar o desactivar los actuadores en modo manual --- #
+    "extractor_rw": "ns=4;i=60",             # Read and Write
+    "humificador_rw": "ns=4;i=61",           # Read and Write
+    "mister_rw": "ns=4;i=62",                # Read and Write
 }
 
 TS = 5.0             # sampling time del loop de monitoreo en segundo plano [s]
