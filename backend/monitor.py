@@ -93,29 +93,40 @@ async def set_modo_automatico(estado: bool):
 # --- Actuadores --- #
 @app.get("/extractor")
 async def get_extractor():
-    return safe_response("extractor", plc.latest_values.get("extractor"))
+    # El estado visible del actuador se obtiene del nodo de lectura
+    return safe_response(
+        "extractor",
+        plc.latest_values.get("extractor")
+        )
 
 
 @app.post("/extractor/{estado}")
 async def set_extractor(estado: bool):
-    return await safe_write("extractor", estado)
+    # La orden de escritura se envia al nodo especifico de lectura/escritura
+    return await safe_write("extractor_rw", estado)
 
 
 @app.get("/humificador")
 async def get_humificador():
-    return safe_response("humificador", plc.latest_values.get("humificador"))
+    return safe_response(
+        "humificador",
+        plc.latest_values.get("humificador")
+        )
 
 
 @app.post("/humificador/{estado}")
 async def set_humificador(estado: bool):
-    return await safe_write("humificador", estado)
+    return await safe_write("humificador_rw", estado)
 
 
 @app.get("/mister")
 async def get_mister():
-    return safe_response("mister", plc.latest_values.get("mister"))
+    return safe_response(
+        "mister",
+        plc.latest_values.get("mister")
+        )
 
 
 @app.post("/mister/{estado}")
 async def set_mister(estado: bool):
-    return await safe_write("mister", estado)
+    return await safe_write("mister_rw", estado)
