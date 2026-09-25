@@ -7,22 +7,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-# Configuración del experimento piloto
+
+# -----------------------------------------------------------------------------
+# Configuración de la prueba piloto
+# -----------------------------------------------------------------------------
 TEST_DURATION_SECONDS = 10 * 60
 SAMPLE_INTERVAL_SECONDS = 1.0
-ACTUATION_DURATION_SECONDS = 35
+ACTUATION_DURATION_SECONDS = 35.0
 
 HUMIDITY_LOWER_THRESHOLD = 92.0
 HUMIDITY_UPPER_THRESHOLD = 94.0
 
-# En el entorno experimental estos nodos son controlados directamente.
-HUMIDIFIER_WRITE_NODE = "humidificador_rw"
+# Nodos de escritura: SOLO para el entorno experimental.
+HUMIDIFIER_WRITE_NODE = "humificador_rw"
 MISTER_WRITE_NODE = "mister_rw"
 
-# Los siguientes nodos son los estados de los actuadores
-# y se conservan como referencia del comportamiento observado por el PLC/OPC UA
-
-HUMIDIFIER_STATUS_NODE = "humidificador"
+# Nodos de estado observados durante la prueba.
+HUMIDIFIER_STATUS_NODE = "humificador"
 MISTER_STATUS_NODE = "mister"
 
 CSV_HEADER = [
@@ -35,6 +36,7 @@ CSV_HEADER = [
     "mister",
 ]
 
+
 @dataclass
 class HumidityExperimentResult:
     test_id: int
@@ -46,18 +48,16 @@ class HumidityExperimentResult:
     maximum_humidity: Optional[float] = None
     csv_path: Optional[str] = None
 
+
 @dataclass
 class HumidityExperiment:
     """
     Ejecuta una prueba experimental aislada del funcionamiento normal del HMI.
 
-    IMPORTANTE:
-    - Esta clase NO debe usarse como lógica de control durante la operación
-      normal del sistema.
-    - Durante una prueba experimental sí controla temporalmente el
-      humidificador y el mister mediante sus nodos *_rw.
+    Durante la operación normal, esta clase NO debe ejecutarse.
+    Durante una prueba, controla temporalmente humidificador y mister mediante
+    sus nodos *_rw y registra la respuesta del ambiente en un CSV.
     """
-
 
     plc: Any
     output_dir: Path = Path("experiments/data")
@@ -87,19 +87,47 @@ class HumidityExperiment:
     async def _set_humidity_actuators(self, state: bool) -> None:
         """Activa/desactiva ambos actuadores exclusivamente para la prueba."""
         await self.plc.write_value(HUMIDIFIER_WRITE_NODE, state)
-        await self.plc.write_value(MISTER_WRITE_NODE, state)
+        try:
+            await self.plc.write_value(MISTER_WRITE_NODE, state)
+        except Exception:
+            # Si el segundo actuador falla al cambiar de estado, intentamos
+            # dejar ambos apagados antes de propagar el error.
+            try:
+                await self.plc.write_value(HUMIDIFIER_WRITE_NODE, False)
+            except Exception:
+                pass
+            raise
 
-    def _snapshot(self, elapsed_seconds: float) -> dict[str, Any]:
-        """Obtiene una instantánea del cache producido por monitor.py."""
-        values = self.plc.latest_values
+    async def _snapshot(self, elapsed_seconds: float) -> dict[str, Any]:
+        """
+        Lee directamente los nodos necesarios para el experimento.
+
+        No usamos latest_values porque el loop normal de monitorización puede
+        tener un intervalo diferente al muestreo experimental.
+        """
+        values: dict[str, Any] = {}
+        node_names = (
+            "temperaturaExt",
+            "humedad_ext",
+            "humedadSHT41",
+            HUMIDIFIER_STATUS_NODE,
+            MISTER_STATUS_NODE,
+        )
+
+        for name in node_names:
+            try:
+                values[name] = await self.plc.read_value(name)
+            except Exception:
+                values[name] = None
+
         return {
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "elapsed_seconds": round(elapsed_seconds, 3),
-            "temperature_ext": values.get("temperaturaExt"),
-            "humidity_ext": values.get("humedad_ext"),
-            "humidity_int": values.get("humedadSHT41"),
-            "humidifier": values.get(HUMIDIFIER_STATUS_NODE),
-            "mister": values.get(MISTER_STATUS_NODE),
+            "temperature_ext": values["temperaturaExt"],
+            "humidity_ext": values["humedad_ext"],
+            "humidity_int": values["humedadSHT41"],
+            "humidifier": values[HUMIDIFIER_STATUS_NODE],
+            "mister": values[MISTER_STATUS_NODE],
         }
 
     @staticmethod
@@ -137,30 +165,33 @@ class HumidityExperiment:
     async def _run(self) -> None:
         test_id = self._next_test_id()
         started_at = datetime.now()
-        result = HumidityExperimentResult(
-            test_id=test_id,
-            started_at=started_at,
-        )
+        result = HumidityExperimentResult(test_id=test_id, started_at=started_at)
         self.current_result = result
 
         csv_path = self._build_csv_path(test_id, started_at)
         result.csv_path = str(csv_path)
+        started_monotonic = asyncio.get_running_loop().time()
+        actuation_finished = False
 
         print(f"🧪 Iniciando prueba experimental #{test_id}")
         print(f"   Duración: {self.test_duration:.0f} s")
         print(f"   Activación: {self.actuation_duration:.0f} s")
         print(f"   CSV: {csv_path}")
 
-        started_monotonic = asyncio.get_running_loop().time()
-
-        actuation_finished = False
-
         try:
             with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
                 writer = csv.DictWriter(csv_file, fieldnames=CSV_HEADER)
                 writer.writeheader()
 
-                # La prueba piloto tiene una sola activación de 35 s.
+                # Primera medición: establece las condiciones iniciales ANTES
+                # de encender los actuadores.
+                initial_elapsed = asyncio.get_running_loop().time() - started_monotonic
+                row = await self._snapshot(initial_elapsed)
+                writer.writerow(row)
+                csv_file.flush()
+                self._update_result_metrics(result, row)
+
+                # Prueba piloto: una única activación de 35 s.
                 await self._set_humidity_actuators(True)
                 print("💧 Humidificador + mister: ON")
 
@@ -169,27 +200,27 @@ class HumidityExperiment:
                     if elapsed >= self.test_duration:
                         break
 
-                    row = self._snapshot(elapsed)
-                    writer.writerow(row)
-                    csv_file.flush()
-                    self._update_result_metrics(result, row)
-
-                    # A los 35 s termina la única activación del piloto.
                     if not actuation_finished and elapsed >= self.actuation_duration:
                         await self._set_humidity_actuators(False)
                         actuation_finished = True
                         print("⏹️ Humidificador + mister: OFF")
 
-                    await asyncio.sleep(self.sample_interval)
+                    row = await self._snapshot(elapsed)
+                    writer.writerow(row)
+                    csv_file.flush()
+                    self._update_result_metrics(result, row)
 
-                # Seguridad: asegurar OFF al finalizar la prueba.
+                    remaining = self.sample_interval
+                    await asyncio.sleep(remaining)
+
+                # Seguridad: asegurar OFF al terminar.
                 await self._set_humidity_actuators(False)
 
         except asyncio.CancelledError:
-            # Una cancelación nunca debe dejar los actuadores experimentales
-            # encendidos.
-            await self._set_humidity_actuators(False)
-            raise
+            try:
+                await self._set_humidity_actuators(False)
+            finally:
+                raise
         finally:
             result.finished_at = datetime.now()
             self.running = False
@@ -203,7 +234,7 @@ class HumidityExperiment:
             print(f"   Datos: {result.csv_path}")
 
     def start(self) -> None:
-        """Inicia una prueba piloto sin bloquear el servidor FastAPI."""
+        """Inicia la prueba sin bloquear el servidor FastAPI."""
         if self.running:
             raise RuntimeError("Ya existe una prueba experimental en ejecución")
 
@@ -223,21 +254,14 @@ class HumidityExperiment:
         result = self.current_result
 
         if result is None:
-            return {
-                "running": False,
-                "result": None,
-            }
+            return {"running": False, "result": None}
 
         return {
             "running": self.running,
             "result": {
                 "test_id": result.test_id,
                 "started_at": result.started_at.isoformat(),
-                "finished_at": (
-                    result.finished_at.isoformat()
-                    if result.finished_at
-                    else None
-                ),
+                "finished_at": result.finished_at.isoformat() if result.finished_at else None,
                 "initial_humidity": result.initial_humidity,
                 "time_to_92": result.time_to_92,
                 "time_to_94": result.time_to_94,
