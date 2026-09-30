@@ -5,7 +5,15 @@ from plc_client import PLCManager
 from typing import Any
 from config import PLC_ENDPOINT, NODE_DEFINITIONS, TS, RECONNECT_DELAY
 
+# Import del modulo de pruebas
+from experiments.experiment_routes import (
+    configure_humidity_experiment,
+    router as experiment_router,
+)
+
 app = FastAPI()
+
+app.include_router(experiment_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +34,7 @@ async def startup_event():
     # Lanza el loop de monitoreo en segundo plano: lee todos los nodos cada
     # TS segundos, los cachea en plc.latest_values y los imprime en
     # terminal (mismo patrón que planta_opcua.py), sin bloquear la API.
+    configure_humidity_experiment(plc)
     plc.start_monitoring(NODE_DEFINITIONS, ts=TS)
 
 
