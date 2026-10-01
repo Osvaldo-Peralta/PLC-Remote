@@ -4,7 +4,8 @@ import type { ResponseMeasurement } from './UseInvernaderoStatus';
 interface ResponseExperimentPanelProps {
   active: boolean;
   measurements: ResponseMeasurement[];
-  onToggleActive: () => void;
+  onStart: () => void;
+  onStop: () => void;
   onClear: () => void;
 }
 
@@ -20,11 +21,12 @@ function seconds(ms: number | null) {
 export default function ResponseExperimentPanel({
   active,
   measurements,
-  onToggleActive,
+  onStart,
+  onStop,
   onClear,
 }: ResponseExperimentPanelProps) {
   const confirmed = measurements.filter(
-    m => m.status === 'confirmed' && m.responseTimeMs !== null,
+    m => m.status === 'confirmed' && m.hmiResponseTimeMs !== null,
   );
 
   const summary = useMemo(() => {
@@ -32,7 +34,7 @@ export default function ResponseExperimentPanel({
       return { count: 0, average: null, min: null, max: null };
     }
 
-    const times = confirmed.map(m => m.responseTimeMs as number);
+    const times = confirmed.map(m => m.hmiResponseTimeMs as number);
     return {
       count: times.length,
       average: times.reduce((sum, value) => sum + value, 0) / times.length,
@@ -45,24 +47,36 @@ export default function ResponseExperimentPanel({
     if (!measurements.length) return;
 
     const header = [
-      'timestamp',
+      'command_id',
+      'command_timestamp_hmi',
       'actuator',
       'action',
       'previous_state',
       'expected_state',
-      'response_time_ms',
-      'response_time_s',
+      'backend_command_timestamp',
+      'backend_detection_timestamp',
+      'backend_response_time_ms',
+      'backend_response_time_s',
+      'hmi_confirmation_timestamp',
+      'hmi_response_time_ms',
+      'hmi_response_time_s',
       'status',
     ];
 
     const rows = measurements.map(m => [
+      m.commandId ?? '',
       m.timestamp,
       m.actuator,
       m.action,
       m.previousState,
       m.expectedState,
-      m.responseTimeMs ?? '',
-      m.responseTimeMs === null ? '' : (m.responseTimeMs / 1000).toFixed(3),
+      m.backendCommandTimestamp ?? '',
+      m.backendDetectionTimestamp ?? '',
+      m.backendResponseTimeMs ?? '',
+      m.backendResponseTimeMs === null ? '' : (m.backendResponseTimeMs / 1000).toFixed(3),
+      m.hmiConfirmationTimestamp ?? '',
+      m.hmiResponseTimeMs ?? '',
+      m.hmiResponseTimeMs === null ? '' : (m.hmiResponseTimeMs / 1000).toFixed(3),
       m.status,
     ]);
 
@@ -77,7 +91,7 @@ export default function ResponseExperimentPanel({
     const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
 
     link.href = url;
-    link.download = `prueba_respuesta_${stamp}.csv`;
+    link.download = `prueba_respuesta_3_etapas_${stamp}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -93,13 +107,13 @@ export default function ResponseExperimentPanel({
             Tiempo de respuesta HMI
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-stone-500">
-            Mide desde la orden del usuario hasta que /status confirma el estado esperado.
+            Registra la orden del usuario, la detección del cambio en el backend/PLC y la confirmación posterior del HMI.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={onToggleActive}
+          onClick={active ? onStop : onStart}
           className={`rounded-md px-4 py-2 text-sm font-medium ${
             active
               ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
@@ -112,9 +126,9 @@ export default function ResponseExperimentPanel({
 
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Metric label="Mediciones" value={String(summary.count)} />
-        <Metric label="Promedio" value={seconds(summary.average)} />
-        <Metric label="Mínimo" value={seconds(summary.min)} />
-        <Metric label="Máximo" value={seconds(summary.max)} />
+        <Metric label="HMI promedio" value={seconds(summary.average)} />
+        <Metric label="HMI mínimo" value={seconds(summary.min)} />
+        <Metric label="HMI máximo" value={seconds(summary.max)} />
       </div>
 
       {active && (
@@ -124,14 +138,14 @@ export default function ResponseExperimentPanel({
       )}
 
       <div className="mt-5 overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[1100px] text-left text-sm">
           <thead className="border-b border-stone-200 text-xs uppercase tracking-wide text-stone-500">
             <tr>
               <th className="px-3 py-2">Fecha/hora</th>
               <th className="px-3 py-2">Actuador</th>
               <th className="px-3 py-2">Acción</th>
-              <th className="px-3 py-2">Anterior</th>
-              <th className="px-3 py-2">Respuesta</th>
+              <th className="px-3 py-2">Backend</th>
+              <th className="px-3 py-2">HMI</th>
               <th className="px-3 py-2">Estado</th>
             </tr>
           </thead>
@@ -150,8 +164,8 @@ export default function ResponseExperimentPanel({
                   </td>
                   <td className="px-3 py-2">{m.actuator}</td>
                   <td className="px-3 py-2">{m.action}</td>
-                  <td className="px-3 py-2">{m.previousState ? 'ON' : 'OFF'}</td>
-                  <td className="px-3 py-2 font-mono">{seconds(m.responseTimeMs)}</td>
+                  <td className="px-3 py-2 font-mono">{seconds(m.backendResponseTimeMs)}</td>
+                  <td className="px-3 py-2 font-mono">{seconds(m.hmiResponseTimeMs)}</td>
                   <td className="px-3 py-2">{statusLabel(m.status)}</td>
                 </tr>
               ))
@@ -181,7 +195,7 @@ export default function ResponseExperimentPanel({
       </div>
 
       <p className="mt-3 text-xs text-stone-400">
-        Si el estado esperado no aparece en /status durante 10 s, la medición se registra como timeout.
+        El tiempo HMI se mide desde la orden en el navegador hasta la confirmación mediante /status. El tiempo backend se mide desde el inicio del comando hasta su detección en el snapshot leído del PLC.
       </p>
     </section>
   );

@@ -11,7 +11,8 @@ export default function InvernaderoDashboard() {
     pending,
     setActuator,
     measurementActive,
-    setMeasurementActive,
+    startMeasurement,
+    stopMeasurement,
     measurements,
     clearMeasurements,
   } = useInvernaderoStatus();
@@ -98,7 +99,8 @@ export default function InvernaderoDashboard() {
       <ResponseExperimentPanel
         active={measurementActive}
         measurements={measurements}
-        onToggleActive={() => setMeasurementActive(prev => !prev)}
+        onStart={startMeasurement}
+        onStop={stopMeasurement}
         onClear={clearMeasurements}
       />
     </div>
