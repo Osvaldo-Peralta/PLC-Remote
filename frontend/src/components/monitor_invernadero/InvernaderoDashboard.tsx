@@ -1,11 +1,21 @@
-// frontend/src/components/monitor_invernadero/InvernaderoDashboard.tsx
 import { sensors, actuators, modoAutomatico } from './InvernaderoElements';
 import { useInvernaderoStatus } from './UseInvernaderoStatus';
 import SensorCard from './SensorCard';
 import ActuatorSwitch from './ActuatorSwitch';
+import ResponseExperimentPanel from './ResponseExperimentPanel';
 
 export default function InvernaderoDashboard() {
-  const { values, error, pending, setActuator } = useInvernaderoStatus();
+  const {
+    values,
+    error,
+    pending,
+    setActuator,
+    measurementActive,
+    startMeasurement,
+    stopMeasurement,
+    measurements,
+    clearMeasurements,
+  } = useInvernaderoStatus();
 
   const isAuto = values[modoAutomatico.id] === true;
 
@@ -13,12 +23,18 @@ export default function InvernaderoDashboard() {
     <div className="mx-auto max-w-4xl p-6">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-emerald-600">Invernadero</p>
-          <h1 className="text-2xl font-semibold text-stone-900">Panel de Monitoreo y Control</h1>
+          <p className="text-xs font-medium uppercase tracking-widest text-emerald-600">
+            Invernadero
+          </p>
+          <h1 className="text-2xl font-semibold text-stone-900">
+            Panel de Monitoreo y Control
+          </h1>
         </div>
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium ${
-            isAuto ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            isAuto
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-amber-100 text-amber-700'
           }`}
         >
           {isAuto ? 'Modo automático' : 'Modo manual'}
@@ -32,9 +48,11 @@ export default function InvernaderoDashboard() {
       )}
 
       <section className="mb-8">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500">Sensores</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500">
+          Sensores
+        </h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {sensors.map((sensor) => (
+          {sensors.map(sensor => (
             <SensorCard
               key={sensor.id}
               label={sensor.name}
@@ -46,25 +64,45 @@ export default function InvernaderoDashboard() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500">Controles</h2>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-500">
+          Controles
+        </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ActuatorSwitch
             label={modoAutomatico.name}
             value={values[modoAutomatico.id]}
             pending={pending[modoAutomatico.id]}
-            onToggle={(next) => setActuator(modoAutomatico.endpoint, modoAutomatico.id, next)}
+            onToggle={next =>
+              setActuator(modoAutomatico.endpoint, modoAutomatico.id, next)
+            }
           />
-          {actuators.map((actuator) => (
+
+          {actuators.map(actuator => (
             <ActuatorSwitch
               key={actuator.id}
               label={actuator.name}
               value={values[actuator.id]}
               pending={pending[actuator.id]}
-              onToggle={(next) => setActuator(actuator.endpoint, actuator.id, next)}
+              onToggle={next =>
+                setActuator(
+                  actuator.endpoint,
+                  actuator.id,
+                  next,
+                  actuator.name,
+                )
+              }
             />
           ))}
         </div>
       </section>
+
+      <ResponseExperimentPanel
+        active={measurementActive}
+        measurements={measurements}
+        onStart={startMeasurement}
+        onStop={stopMeasurement}
+        onClear={clearMeasurements}
+      />
     </div>
   );
 }

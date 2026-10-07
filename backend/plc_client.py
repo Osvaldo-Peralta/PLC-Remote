@@ -1,7 +1,8 @@
 from asyncua import Client, ua
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Callable
 import asyncio
 import time
+import inspect
 
 
 class PLCManager:
@@ -14,6 +15,19 @@ class PLCManager:
         self.latest_values: Dict[str, Any] = {}
         self.connected = False
         self._monitor_task: Optional[asyncio.Task] = None
+        self._snapshot_callbacks: list[Callable[[Dict[str, Any]], Any]] = []
+
+    def add_snapshot_callback(self, callback: Callable[[Dict[str, Any]], Any]) -> None:
+        """
+        Registra un callback opcional ejecutado después de cada lectura completa.
+        """
+
+        if callback not in self._snapshot_callbacks:
+            self._snapshot_callbacks.append(callback)
+
+    def remote_snapshot_callback(self, callback: Callable[[Dict[str, Any]], Any]) -> None:
+        if callback in self._snapshot_callbacks:
+            self._snapshot_callbacks.remove(callback)
 
     async def connect(self):
         """
@@ -83,6 +97,17 @@ class PLCManager:
         line = " | ".join(f"{k}={round(v, 2)}" for k, v in values.items())
         print(f"[{time.strftime('%H:%M:%S')}] {line}")
 
+    async def _nofify_snapshot_callbacks(self, values: Dict[str, Any]) -> None:
+        # Se usa una copia para que un callback no pueda modificar el cache del PLC.
+        snapshot = dict (values)
+        for callback in list(self._snapshot_callbacks):
+            try:
+                result = callback(snapshot)
+                if inspect.isawaitable(result):
+                    await result
+            except Exception as e:
+                print(f"⚠️ Error en callback de snapshot: {e}")
+
     async def monitor_loop(self, ts: float = 1.0):
         """
         Loop de fondo:
@@ -101,6 +126,7 @@ class PLCManager:
             try:
                 self.latest_values = await self.read_all()
                 self._print_status(self.latest_values)
+                await self._nofify_snapshot_callbacks(self.latest_values)
             except Exception as e:
                 print(f"❌ Error en el loop de monitoreo: {e}")
                 self.connected = False

@@ -3,9 +3,9 @@ PLC_ENDPOINT = "opc.tcp://192.168.1.99:4840"
 NODE_DEFINITIONS = {
     "modoAutomatico": "ns=4;i=43",
     "humedad_ext": "ns=4;i=48",
-    "humedadSHT41": "ns=4;i=46",
+    "humedadSCD41": "ns=4;i=73",        # Nuevo sensor
     "temperaturaExt": "ns=4;i=49",
-    "temperaturaSHT41": "ns=4;i=47",
+    "temperaturaSCD41": "ns=4;i=84",    # Nuevo sensor
 
     "extractor": "ns=4;i=29",       # Read only
     "humificador": "ns=4;i=30",     # Read only
