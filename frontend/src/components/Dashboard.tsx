@@ -49,7 +49,7 @@ export default function Dashboard() {
                         {element.type === 'light' && (
                             <Light
                                 name={element.name}
-                                value={state[element.id]}
+                                value={state[element.id] === true ? true : state[element.id] === false ? false : undefined}
                             />
                         )}
                     </div>

@@ -5,7 +5,7 @@ interface LightProps {
     title?: string;
 }
 
-export default function Light({ name, value, title }: LightProps) {
+export default function Light({ value, title }: LightProps) {
     return (
         <div className="flex items-center">
             <div className={`w-6 h-6 rounded-full mr-2 ${value === null || value === undefined ? 'bg-gray-400' : value ? 'bg-green-500' : 'bg-gray-300'}`}

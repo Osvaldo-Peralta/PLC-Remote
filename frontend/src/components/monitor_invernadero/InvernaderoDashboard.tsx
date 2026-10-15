@@ -56,7 +56,7 @@ export default function InvernaderoDashboard() {
             <SensorCard
               key={sensor.id}
               label={sensor.name}
-              value={values[sensor.id]}
+              value={typeof values[sensor.id] === 'number' ? Number(values[sensor.id]) : undefined}
               unit={sensor.unit}
             />
           ))}
@@ -70,7 +70,7 @@ export default function InvernaderoDashboard() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ActuatorSwitch
             label={modoAutomatico.name}
-            value={values[modoAutomatico.id]}
+            value={values[modoAutomatico.id] === true ? true : values[modoAutomatico.id] === false ? false : undefined}
             pending={pending[modoAutomatico.id]}
             onToggle={next =>
               setActuator(modoAutomatico.endpoint, modoAutomatico.id, next)
@@ -81,7 +81,7 @@ export default function InvernaderoDashboard() {
             <ActuatorSwitch
               key={actuator.id}
               label={actuator.name}
-              value={values[actuator.id]}
+              value={values[actuator.id] === true ? true : values[actuator.id] === false ? false : undefined}
               pending={pending[actuator.id]}
               onToggle={next =>
                 setActuator(

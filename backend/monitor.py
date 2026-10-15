@@ -8,14 +8,21 @@ from config import PLC_ENDPOINT, NODE_DEFINITIONS, TS, RECONNECT_DELAY
 # Import del modulo de pruebas
 from experiments.experiment_routes import (
     configure_humidity_experiment,
+    shutdown_humidity_experiment,
     router as experiment_router,
 )
 
 from experiments.response_experiment import response_tracker, RW_TO_STATUS
+from experiments.humidity.target_attainment.routes import (
+    configure_target_attainment_experiment,
+    shutdown_target_attainment_experiment,
+    router as target_attainment_router,
+)
 
 app = FastAPI()
 
 app.include_router(experiment_router)
+app.include_router(target_attainment_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,12 +44,16 @@ async def startup_event():
     # TS segundos, los cachea en plc.latest_values y los imprime en
     # terminal (mismo patrón que planta_opcua.py), sin bloquear la API.
     configure_humidity_experiment(plc)
+    configure_target_attainment_experiment(plc)
     plc.add_snapshot_callback(response_tracker.observe_snapshot)
     plc.start_monitoring(NODE_DEFINITIONS, ts=TS)
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    # First request a safe experiment shutdown while OPC UA is still connected.
+    await shutdown_humidity_experiment()
+    await shutdown_target_attainment_experiment()
     response_tracker.stop()
     plc.remote_snapshot_callback(response_tracker.observe_snapshot)
     await plc.stop_monitoring()
@@ -103,7 +114,7 @@ async def get_humedad_ext():
 
 @app.get("/humedad_sht41")
 async def get_humedad_sht41():
-    return safe_response("humedadSHT41", plc.latest_values.get("humedadSHT41"))
+    return safe_response("humedadSCD41", plc.latest_values.get("humedadSCD41"))
 
 
 @app.get("/temperatura_ext")
@@ -113,7 +124,7 @@ async def get_temperatura_ext():
 
 @app.get("/temperatura_sht41")
 async def get_temperatura_sht41():
-    return safe_response("temperaturaSHT41", plc.latest_values.get("temperaturaSHT41"))
+    return safe_response("temperaturaSCD41", plc.latest_values.get("temperaturaSCD41"))
 
 # -----
 # Modo automático

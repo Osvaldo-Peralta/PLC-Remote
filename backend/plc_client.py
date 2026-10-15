@@ -72,29 +72,49 @@ class PLCManager:
 
     async def read_value(self, name: str) -> Any:
         node = self.nodes.get(name)
-        if not node:
+        if node is None:
             raise KeyError(f"Nodo '{name}' no encontrado")
-        return await node.read_value()
+        if not self.connected:
+            raise ConnectionError("Cliente OPC UA marcado como desconectado")
+        try:
+            return await node.read_value()
+        except Exception as exc:
+            # Inform the background monitor that the active session may be stale.
+            self.connected = False
+            raise RuntimeError(f"OPC UA READ failed for node '{name}': {exc}") from exc
 
     async def write_value(self, name: str, value: Any, variant_type: ua.VariantType = ua.VariantType.Boolean):
         node = self.nodes.get(name)
-        if not node:
+        if node is None:
             raise KeyError(f"Nodo '{name}' no encontrado")
-        await node.write_value(ua.DataValue(ua.Variant(value, variant_type)))
+        if not self.connected:
+            raise ConnectionError("Cliente OPC UA marcado como desconectado; escritura no enviada")
+        try:
+            await node.write_value(ua.DataValue(ua.Variant(value, variant_type)))
+        except Exception as exc:
+            self.connected = False
+            raise RuntimeError(f"OPC UA WRITE failed for node '{name}': {exc}") from exc
 
     async def read_all(self) -> Dict[str, Any]:
-        """Lee todos los nodos registrados en una sola pasada."""
+        """Lee todos los nodos; una falla aborta el snapshot para permitir reconexión."""
         values = {}
-        for name in self.nodes:
-            try:
-                values[name] = await self.read_value(name)
-            except Exception as e:
-                values[name] = None
-                print(f"❌ Error al leer '{name}': {e}")
+        for name in list(self.nodes):
+            # No se convierte un error de transporte en un valor None silencioso.
+            values[name] = await self.read_value(name)
         return values
 
     def _print_status(self, values: Dict[str, Any]):
-        line = " | ".join(f"{k}={round(v, 2)}" for k, v in values.items())
+        # Los valores None o no numéricos no deben romper el bucle de monitoreo.
+        def format_value(value: Any) -> str:
+            if value is None:
+                return "N/A"
+            if isinstance(value, bool):
+                return str(value)
+            if isinstance(value, (int, float)):
+                return f"{value:.2f}"
+            return str(value)
+
+        line = " | ".join(f"{key}={format_value(value)}" for key, value in values.items())
         print(f"[{time.strftime('%H:%M:%S')}] {line}")
 
     async def _nofify_snapshot_callbacks(self, values: Dict[str, Any]) -> None:
@@ -120,13 +140,16 @@ class PLCManager:
             start = time.time()
 
             if not self.connected:
+                # Discard the stale client/session before reconnecting.
+                await self.disconnect()
                 await self.connect()
                 await self.initialize_nodes(self.node_definitions)
 
             try:
-                self.latest_values = await self.read_all()
-                self._print_status(self.latest_values)
-                await self._nofify_snapshot_callbacks(self.latest_values)
+                snapshot = await self.read_all()
+                self.latest_values = snapshot
+                self._print_status(snapshot)
+                await self._nofify_snapshot_callbacks(snapshot)
             except Exception as e:
                 print(f"❌ Error en el loop de monitoreo: {e}")
                 self.connected = False

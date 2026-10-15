@@ -4,7 +4,7 @@ const PLC_API_BASE = 'http://localhost:8000';
 const RESPONSE_TIMEOUT_MS = 10000;
 
 export interface InvernaderoValues {
-  [key: string]: any;
+  [key: string]: boolean | number | string | null | undefined;
 }
 
 export interface ResponseMeasurement {
