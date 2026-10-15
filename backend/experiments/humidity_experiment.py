@@ -109,7 +109,7 @@ class HumidityExperiment:
         node_names = (
             "temperaturaExt",
             "humedad_ext",
-            "humedadSHT41",
+            "humedadSCD41",
             HUMIDIFIER_STATUS_NODE,
             MISTER_STATUS_NODE,
         )
@@ -125,7 +125,7 @@ class HumidityExperiment:
             "elapsed_seconds": round(elapsed_seconds, 3),
             "temperature_ext": values["temperaturaExt"],
             "humidity_ext": values["humedad_ext"],
-            "humidity_int": values["humedadSHT41"],
+            "humidity_int": values["humedadSCD41"],
             "humidifier": values[HUMIDIFIER_STATUS_NODE],
             "mister": values[MISTER_STATUS_NODE],
         }
