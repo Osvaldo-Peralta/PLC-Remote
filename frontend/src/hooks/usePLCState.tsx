@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 const PLC_API_BASE = 'http://localhost:8000';
 
 export interface PLCState {
-  [key: string]: any;
+  [key: string]: boolean | number | string | null | undefined;
 }
 
 export const usePLCState = (elements: { id: string; endpoint: string }[]) => {

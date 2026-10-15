@@ -11,13 +11,13 @@ interface SemaforoState {
 export default function SemaforoPanel() {
     // Se filtraran solo los elementos que se necesiten para el semaforo
     const semaforoElements = plcElements.filter(plc => ['foco_rojo', 'foco_amarillo', 'foco_verde', 'current_time'].includes(plc.id));
-    const { state, loading, error } = usePLCState(semaforoElements.map(plc => ({ id: plc.id, endpoint: plc.endpoint! })));
+    const { state, error } = usePLCState(semaforoElements.map(plc => ({ id: plc.id, endpoint: plc.endpoint! })));
 
     const semaforoState: SemaforoState = {
-        foco_rojo: state['foco_rojo'] || false,
-        foco_amarillo: state['foco_amarillo'] || false,
-        foco_verde: state['foco_verde'] || false,
-        current_time: state['current_time'] || 0, // Se asume que desde el backend el tiempo ya viene convertido en segundos.
+        foco_rojo: state['foco_rojo'] === true,
+        foco_amarillo: state['foco_amarillo'] === true,
+        foco_verde: state['foco_verde'] === true,
+        current_time: typeof state['current_time'] === 'number' ? state['current_time'] : 0, // Se asume que desde el backend el tiempo ya viene convertido en segundos.
     };
 
 // Convertir el tiempo se segundos a milisegundos (MM:SS)

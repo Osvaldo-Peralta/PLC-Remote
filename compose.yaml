@@ -1,0 +1,22 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    container_name: sistema-hmi-backend
+    environment:
+      PLC_ENDPOINT: ${PLC_ENDPOINT:-opc.tcp://192.168.1.99:4840}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/experiments/data:/app/experiments/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: sistema-hmi-frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped

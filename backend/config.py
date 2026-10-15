@@ -1,4 +1,6 @@
-PLC_ENDPOINT = "opc.tcp://192.168.1.99:4840"
+import os
+
+PLC_ENDPOINT = os.getenv("PLC_ENDPOINT", "opc.tcp://192.168.1.99:4840")
 
 NODE_DEFINITIONS = {
     "modoAutomatico": "ns=4;i=43",

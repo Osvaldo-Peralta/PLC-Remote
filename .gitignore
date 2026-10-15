@@ -25,3 +25,5 @@ dist-ssr
 *.sln
 *.sw?
 frontend/.vscode
+# Local environment settings
+.env
