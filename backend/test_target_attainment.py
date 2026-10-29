@@ -9,6 +9,7 @@ from pathlib import Path
 
 from experiments.humidity.target_attainment.evaluator import ThresholdEvaluator
 from experiments.humidity.target_attainment.experiment import HumidityTargetAttainmentExperiment
+from experiments.humidity.target_attainment import experiment as target_experiment_module
 from experiments.humidity.models import ExperimentState, SensorSample
 
 
@@ -72,6 +73,16 @@ class ThresholdEvaluatorTests(unittest.TestCase):
         self.assertFalse(evaluator.milestones[94.0].confirmed)
 
 
+class ObservationIntervalConfigurationTests(unittest.TestCase):
+    def test_only_fast_post_humidification_wait_is_reduced_to_one_minute(self):
+        self.assertEqual(target_experiment_module.POST_HUMIDIFICATION_WAIT_SECONDS, 6 * 60)
+        self.assertEqual(target_experiment_module.POST_HUMIDIFICATION_SHORT_WAIT_SECONDS, 3 * 60)
+        self.assertEqual(target_experiment_module.POST_HUMIDIFICATION_FAST_WAIT_SECONDS, 1 * 60)
+        self.assertEqual(target_experiment_module.SHORT_WAIT_HUMIDITY_THRESHOLD, 80.0)
+        self.assertEqual(target_experiment_module.FAST_WAIT_HUMIDITY_THRESHOLD, 85.0)
+        self.assertEqual(target_experiment_module.TARGET_MIN_HUMIDITY, 92.0)
+
+
 class TargetAttainmentExperimentTests(unittest.IsolatedAsyncioTestCase):
     async def test_reaches_both_milestones_in_one_run_and_shuts_outputs_off(self):
         plc = FakePLC()
@@ -110,6 +121,57 @@ class TargetAttainmentExperimentTests(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(any(name == "humificador_rw" and value for name, value in plc.writes))
             self.assertFalse(any(name == "mister_rw" and value for name, value in plc.writes))
             self.assertTrue(all(value is False for value in plc.outputs.values()))
+
+    async def test_persistent_92_event_does_not_interrupt_later_humidification(self):
+        plc = FakePLC()
+        with tempfile.TemporaryDirectory() as directory:
+            experiment = HumidityTargetAttainmentExperiment(
+                plc, Path(directory), max_duration_seconds=1.0,
+                stability_seconds=0.02, sample_interval_seconds=0.01,
+            )
+            # Simulate a prior crossing from an earlier activation.
+            experiment.evaluator.update(92.1, 1.0)
+            experiment.first_crossing_92_event.set()
+
+            outcome = await experiment._wait_until(0.04, interrupt_on_92=True)
+            self.assertEqual(outcome, "duration")
+
+    async def test_humidification_can_reactivate_after_humidity_falls_below_92(self):
+        plc = FakePLC()
+        with tempfile.TemporaryDirectory() as directory:
+            experiment = HumidityTargetAttainmentExperiment(
+                plc, Path(directory), max_duration_seconds=0.18,
+                stability_seconds=1.0, sample_interval_seconds=0.01,
+            )
+            # First activation crosses 92%; the next sample drops below it.
+            experiment.sampler = SequenceSampler(plc, [91.0, 92.2, 91.0])
+            await experiment.start()
+            await asyncio.wait_for(experiment.task, timeout=1.0)
+
+            humidifier_on_writes = [
+                value for name, value in plc.writes
+                if name == "humificador_rw" and value is True
+            ]
+            self.assertGreaterEqual(len(humidifier_on_writes), 2)
+            self.assertTrue(all(value is False for value in plc.outputs.values()))
+
+    async def test_first_92_crossing_still_interrupts_the_current_activation(self):
+        plc = FakePLC()
+        with tempfile.TemporaryDirectory() as directory:
+            experiment = HumidityTargetAttainmentExperiment(
+                plc, Path(directory), max_duration_seconds=1.0,
+                stability_seconds=0.02, sample_interval_seconds=0.01,
+            )
+
+            async def cross_92_during_activation():
+                await asyncio.sleep(0.01)
+                experiment.evaluator.update(92.1, 1.0)
+                experiment.first_crossing_92_event.set()
+
+            crossing_task = asyncio.create_task(cross_92_during_activation())
+            outcome = await experiment._wait_until(0.2, interrupt_on_92=True)
+            await crossing_task
+            self.assertEqual(outcome, "target_92")
 
     async def test_constant_sensor_values_are_flagged_in_csv(self):
         plc = FakePLC()

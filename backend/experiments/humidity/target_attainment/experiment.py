@@ -16,12 +16,21 @@ from .recorder import TargetAttainmentRecorder
 
 DEFAULT_MAX_DURATION_SECONDS = 60 * 60
 DEFAULT_SAMPLE_INTERVAL_SECONDS = 1.0
-POST_HUMIDIFICATION_WAIT_SECONDS = 10 * 60
+# POST_HUMIDIFICATION_WAIT_SECONDS = 10 * 60
 
-POST_HUMIDIFICATION_SHORT_WAIT_SECONDS = 5 * 60
+# POST_HUMIDIFICATION_SHORT_WAIT_SECONDS = 5 * 60
+# SHORT_WAIT_HUMIDITY_THRESHOLD = 80.0
+# TARGET_MIN_HUMIDITY = 92.0
+
+# Intervalos de observación después de cada activación.
+# Entre 85% y 92%, reevaluar tras 1 minuto para recuperar antes el umbral.
+POST_HUMIDIFICATION_WAIT_SECONDS = 6 * 60
+POST_HUMIDIFICATION_SHORT_WAIT_SECONDS = 3 * 60
+POST_HUMIDIFICATION_FAST_WAIT_SECONDS = 1 * 60
+
 SHORT_WAIT_HUMIDITY_THRESHOLD = 80.0
+FAST_WAIT_HUMIDITY_THRESHOLD = 85.0
 TARGET_MIN_HUMIDITY = 92.0
-
 
 class HumidityTargetAttainmentExperiment:
     """Measures time to 92% and then 94% without changing the control policy.
@@ -233,11 +242,36 @@ class HumidityTargetAttainmentExperiment:
                         break
                     if outcome in {"stopped", "error"}:
                         break
-                    # Keep the existing ten-minute post-actuation observation
-                    # interval, even if 92% is crossed during activation.
+                    # Select the post-humidification observation interval
+                    # using the latest available indoor humidity reading.
+                    humidity_after_actuation = (
+                        self.latest_sample.humidity_inside
+                        if self.latest_sample is not None
+                        else sample.humidity_inside
+                    )
+
+                    if humidity_after_actuation < SHORT_WAIT_HUMIDITY_THRESHOLD:
+                        wait_seconds = POST_HUMIDIFICATION_WAIT_SECONDS
+
+                    elif humidity_after_actuation < FAST_WAIT_HUMIDITY_THRESHOLD:
+                        wait_seconds = POST_HUMIDIFICATION_SHORT_WAIT_SECONDS
+
+                    elif humidity_after_actuation < TARGET_MIN_HUMIDITY:
+                        wait_seconds = POST_HUMIDIFICATION_FAST_WAIT_SECONDS
+
+                    else:
+                        # Por encima del umbral mínimo, volver a evaluar inmediatamente.
+                        wait_seconds = 0.0
+
+                    print(
+                        f"[target-attainment] id={self.experiment_id} "
+                        f"post_humidification_wait={wait_seconds / 60:.0f}min "
+                        f"humidity={humidity_after_actuation:.3f}%"
+                    )
+
                     self.state = ExperimentState.WAITING
                     outcome = await self._wait_until(
-                        POST_HUMIDIFICATION_WAIT_SECONDS,
+                        wait_seconds,
                         interrupt_on_92=False,
                     )
                     if outcome == "timeout":
@@ -456,6 +490,13 @@ class HumidityTargetAttainmentExperiment:
                 pass
 
     async def _wait_until(self, seconds: float, *, interrupt_on_92: bool) -> str:
+        # The 92% event is persistent for the whole experiment. Only use it as
+        # an interruption trigger until the first crossing has been recorded;
+        # otherwise every later humidification pulse would stop immediately.
+        interrupt_for_first_crossing = (
+            interrupt_on_92
+            and not self.evaluator.milestones[92.0].first_crossed
+        )
         deadline = time.monotonic() + seconds
         while True:
             if self.error:
@@ -467,7 +508,7 @@ class HumidityTargetAttainmentExperiment:
                 return "timeout" if self._elapsed() >= self.max_duration_seconds else "duration"
 
             waits = {asyncio.create_task(self.stop_event.wait()), asyncio.create_task(self.target_94_stable_event.wait())}
-            if interrupt_on_92:
+            if interrupt_for_first_crossing:
                 waits.add(asyncio.create_task(self.first_crossing_92_event.wait()))
             done, pending = await asyncio.wait(
                 waits,
@@ -486,7 +527,7 @@ class HumidityTargetAttainmentExperiment:
                 return "stopped"
             if self.target_94_stable_event.is_set():
                 return "target"
-            if interrupt_on_92 and self.first_crossing_92_event.is_set():
+            if interrupt_for_first_crossing and self.first_crossing_92_event.is_set():
                 return "target_92"
 
     def _record_error(self, exc: Exception, *, stage: str) -> None:

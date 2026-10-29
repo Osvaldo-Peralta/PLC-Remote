@@ -12,13 +12,13 @@ def decide(humidity_inside: float) -> ControlDecision:
     This module contains only experimental policy; it has no PLC or timing concerns.
     """
     if humidity_inside < 75.0:
-        return ControlDecision(ActionType.HUMIDIFY, 40.0, "Humedad inferior a 75 %")
+        return ControlDecision(ActionType.HUMIDIFY, 45.0, "Humedad inferior a 75 %")
 
     if humidity_inside < 85.0:
-        return ControlDecision(ActionType.HUMIDIFY, 20.0, "Humedad entre 75 % y 85 %")
+        return ControlDecision(ActionType.HUMIDIFY, 25.0, "Humedad entre 75 % y 85 %")
 
     if humidity_inside < TARGET_MIN:
-        return ControlDecision(ActionType.HUMIDIFY, 10.0, "Humedad entre 85 % y 92 %")
+        return ControlDecision(ActionType.HUMIDIFY, 20.0, "Humedad entre 85 % y 92 %")
 
     if humidity_inside <= TARGET_MAX:
         return ControlDecision(ActionType.FINISH, None, "Humedad dentro del intervalo objetivo 92-94 %")
