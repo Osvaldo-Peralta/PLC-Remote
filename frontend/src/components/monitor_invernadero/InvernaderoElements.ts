@@ -14,9 +14,9 @@ export interface ActuatorConfig {
 }
 
 export const sensors: SensorConfig[] = [
-  { id: 'humedad_ext', name: 'Humedad Exterior', unit: '%' },
+  { id: 'humedad_ext', name: 'Humedad Exterior (SHT41)', unit: '%' },
   { id: 'humedadSCD41', name: 'Humedad Interior (SCD41)', unit: '%' },
-  { id: 'temperaturaExt', name: 'Temperatura Exterior', unit: '°C' },
+  { id: 'temperaturaExt', name: 'Temperatura Exterior (SHT41)', unit: '°C' },
   { id: 'temperaturaSCD41', name: 'Temperatura Interior (SCD41)', unit: '°C' },
 ];
 
